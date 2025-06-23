@@ -1,8 +1,17 @@
-<!DOCTYPE html>
+function resetTD() {
+            // Clear arrays
+            towers.forEach(tower => scene.remove(tower.mesh));
+            enemies.forEach(enemy => scene.remove(enemy.mesh));
+            projectiles.forEach(projectile => scene.remove(<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#667eea">
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiVWx0aW1hdGUgR2FtaW5nIEh1YiIsInNob3J0X25hbWUiOiJHYW1pbmdIdWIiLCJzdGFydF91cmwiOiIvIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzY2N2VlYSIsInRoZW1lX2NvbG9yIjoiIzY2N2VlYSIsImljb25zIjpbeyJzcmMiOiJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUIzYVdSMGFEMGlOVEV5SWlCb1pXbG5hSFE5SWpVeE1pSWdkbWxsZDBKdmVEMGlNQ0F3SURVRE1pQTFNVElpSUdacGJHdzlJaU5tWmpaaVpUSmhJaUJ5WldOME9TSXlOallpSUhKNE9TSXpJaUJqYkdGemN6MGlhV05MYzNZaVBqeHlaV04wSUhkcFpIUm9QU0l6TnpZaUlHaGxhV2RvZEQwaU16YzJJaUJtYVd4c1BTSWpORFU1TVVjeklpOCtQSFJsZUhRZ2VEMGlNelE0SWlCNVBTSTBOVFlpSUdacGJHdzlJaU5HUmtaR1JqQWlJR1p2Ym5RdGMybDZaVDBpTkRnaUlHWnZiblF0ZDJWcFoyaDBQU0ppYjJ4a0lpQjBaWGgwTFdGdVkyaHZjajBpYldsa1pHeGxJajVIWVcxbGN6dzJlblErUEM5MFpYaDBQand2YzNabkdFSS9Pbj0iLCJzaXplcyI6IjUxMng1MTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
     <title>2048 & Tower Defense 3D</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
@@ -203,6 +212,93 @@
             background: linear-gradient(45deg, #00d2ff, #3a7bd5);
         }
 
+        .td-btn:disabled {
+            background: linear-gradient(45deg, #666, #555);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .upgrade-btn {
+            background: linear-gradient(45deg, #9c27b0, #673ab7);
+        }
+
+        .upgrade-btn:hover:not(:disabled) {
+            background: linear-gradient(45deg, #ad42c4, #7e57c2);
+        }
+
+        .game-over-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .game-over-content {
+            background: linear-gradient(135deg, #ff416c, #ff4757);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            color: white;
+            max-width: 400px;
+            margin: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            animation: modalPop 0.5s ease-out;
+        }
+
+        @keyframes modalPop {
+            0% { transform: scale(0.7); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .game-over-content h2 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .game-over-stats {
+            margin: 20px 0;
+            font-size: 1.2em;
+        }
+
+        .tower-info {
+            position: fixed;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 1500;
+            display: none;
+            backdrop-filter: blur(5px);
+        }
+
+        .wave-counter {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .difficulty-indicator {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+            padding: 5px 15px;
+            border-radius: 10px;
+            margin-left: 10px;
+            font-size: 14px;
+        }
+
         #td-canvas {
             border: 3px solid rgba(255,255,255,0.3);
             border-radius: 15px;
@@ -218,10 +314,126 @@
             backdrop-filter: blur(10px);
         }
 
+        /* Mobile Enhancements */
+        .mobile-controls {
+            display: none;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 20px auto;
+            max-width: 300px;
+        }
+
+        .mobile-btn {
+            padding: 20px;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            border: none;
+            border-radius: 15px;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+        }
+
+        .mobile-btn:hover, .mobile-btn:active {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        }
+
+        .mobile-btn:active {
+            transform: translateY(0);
+            background: linear-gradient(45deg, #388E3C, #2E7D32);
+        }
+
+        .swipe-indicator {
+            display: none;
+            text-align: center;
+            margin: 10px 0;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            font-size: 16px;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .touch-feedback {
+            position: absolute;
+            pointer-events: none;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            animation: ripple 0.6s ease-out;
+        }
+
+        @keyframes ripple {
+            0% {
+                width: 0;
+                height: 0;
+                opacity: 1;
+            }
+            100% {
+                width: 100px;
+                height: 100px;
+                opacity: 0;
+            }
+        }
+
+        .vibrate-feedback {
+            animation: vibrate 0.1s ease-in-out;
+        }
+
+        @keyframes vibrate {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            75% { transform: translateX(2px); }
+        }
+
+        /* PWA Styles */
+        .install-prompt {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: linear-gradient(45deg, #2196F3, #1976D2);
+            color: white;
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        .install-prompt button {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            margin-left: 10px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
         @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
             .game-selector {
                 flex-direction: column;
                 align-items: center;
+                gap: 15px;
+            }
+
+            .game-btn {
+                width: 200px;
+                padding: 12px 20px;
+                font-size: 16px;
             }
             
             .tile {
@@ -233,11 +445,84 @@
             .grid-2048 {
                 gap: 10px;
                 padding: 15px;
+                max-width: 320px;
+            }
+
+            .mobile-controls {
+                display: grid;
+            }
+
+            .swipe-indicator {
+                display: block;
             }
             
             #td-canvas {
                 max-width: 100%;
-                height: auto;
+                height: 300px;
+                width: 100%;
+            }
+
+            .td-ui {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .td-stats {
+                justify-content: center;
+                font-size: 16px;
+            }
+
+            .td-controls {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            .td-btn {
+                font-size: 12px;
+                padding: 8px 15px;
+            }
+
+            .score-board {
+                gap: 15px;
+                font-size: 18px;
+            }
+
+            .score-item {
+                padding: 10px 15px;
+            }
+
+            .instructions {
+                font-size: 14px;
+                padding: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header {
+                padding: 15px 10px;
+            }
+
+            .tile {
+                width: 60px;
+                height: 60px;
+                font-size: 16px;
+            }
+
+            .grid-2048 {
+                gap: 8px;
+                padding: 12px;
+                max-width: 280px;
+            }
+
+            .score-board {
+                flex-direction: column;
+                gap: 10px;
+                font-size: 16px;
+            }
+
+            #td-canvas {
+                height: 250px;
             }
         }
     </style>
@@ -262,8 +547,22 @@
             <div class="controls">
                 <button class="new-game-btn" onclick="newGame2048()">New Game</button>
             </div>
+            <div class="mobile-controls">
+                <div></div>
+                <button class="mobile-btn" onclick="move('up')" ontouchstart="createTouchFeedback(event)">↑</button>
+                <div></div>
+                <button class="mobile-btn" onclick="move('left')" ontouchstart="createTouchFeedback(event)">←</button>
+                <div></div>
+                <button class="mobile-btn" onclick="move('right')" ontouchstart="createTouchFeedback(event)">→</button>
+                <div></div>
+                <button class="mobile-btn" onclick="move('down')" ontouchstart="createTouchFeedback(event)">↓</button>
+                <div></div>
+            </div>
+            <div class="swipe-indicator">
+                <p>💡 Swipe or use buttons to move tiles!</p>
+            </div>
             <div class="instructions">
-                <p>Use arrow keys or WASD to move tiles. Combine tiles with the same number to reach 2048!</p>
+                <p>Use arrow keys, WASD, swipe gestures, or mobile buttons to move tiles. Combine tiles with the same number to reach 2048!</p>
             </div>
         </div>
     </div>
@@ -279,18 +578,191 @@
                 </div>
                 <div class="td-controls">
                     <button class="td-btn" id="tower-btn" onclick="selectTower()">Build Tower ($20)</button>
+                    <button class="td-btn upgrade-btn" id="upgrade-btn" onclick="selectUpgrade()" disabled>Upgrade ($50)</button>
                     <button class="td-btn" onclick="startWave()">Start Wave</button>
                     <button class="td-btn" onclick="resetTD()">Reset</button>
                 </div>
             </div>
-            <canvas id="td-canvas" width="1000" height="600"></canvas>
+            <canvas id="td-canvas" width="1000" height="600">            </canvas>
+            <div class="wave-counter" id="wave-counter">
+                Wave: <span id="wave-display">1</span>
+                <span class="difficulty-indicator" id="difficulty">Normal</span>
+            </div>
             <div class="instructions">
-                <p>Click "Build Tower" then click on the path to place towers. Defend against waves of enemies!</p>
+                <p>📱 Touch controls: Tap buttons or click on the battlefield to place towers. Right-click towers to upgrade! Defend against waves of enemies!</p>
             </div>
         </div>
     </div>
 
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="game-over-modal">
+        <div class="game-over-content">
+            <h2>💀 GAME OVER</h2>
+            <div class="game-over-stats">
+                <p>You survived <strong id="final-wave">0</strong> waves!</p>
+                <p>Enemies defeated: <strong id="enemies-killed">0</strong></p>
+                <p>Towers built: <strong id="towers-built">0</strong></p>
+            </div>
+            <button class="new-game-btn" onclick="closeGameOver()">Play Again</button>
+        </div>
+    </div>
+
+    <!-- Tower Info Tooltip -->
+    <div id="tower-info" class="tower-info">
+        <div id="tower-details"></div>
+    </div>
+
+    <!-- PWA Install Prompt -->
+    <div id="install-prompt" class="install-prompt">
+        <span>📱 Install this game for the best mobile experience!</span>
+        <button onclick="installPWA()">Install</button>
+        <button onclick="dismissInstall()">Later</button>
+    </div>
+
     <script>
+        // Mobile and PWA functionality
+        let deferredPrompt;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchEndX = 0;
+        let touchEndY = 0;
+
+        // PWA Installation
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            showInstallPrompt();
+        });
+
+        function showInstallPrompt() {
+            const prompt = document.getElementById('install-prompt');
+            if (prompt) {
+                prompt.style.display = 'block';
+                setTimeout(() => {
+                    prompt.style.display = 'none';
+                }, 10000); // Auto-hide after 10 seconds
+            }
+        }
+
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((result) => {
+                    if (result.outcome === 'accepted') {
+                        console.log('PWA installed');
+                    }
+                    deferredPrompt = null;
+                    dismissInstall();
+                });
+            }
+        }
+
+        function dismissInstall() {
+            document.getElementById('install-prompt').style.display = 'none';
+        }
+
+        // Touch feedback effects
+        function createTouchFeedback(event) {
+            const button = event.target;
+            const rect = button.getBoundingClientRect();
+            const ripple = document.createElement('div');
+            
+            ripple.className = 'touch-feedback';
+            ripple.style.left = (event.touches[0].clientX - rect.left - 25) + 'px';
+            ripple.style.top = (event.touches[0].clientY - rect.top - 25) + 'px';
+            
+            button.appendChild(ripple);
+            
+            // Haptic feedback
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+            
+            // Visual feedback
+            button.classList.add('vibrate-feedback');
+            setTimeout(() => {
+                button.classList.remove('vibrate-feedback');
+                if (ripple.parentNode) {
+                    ripple.parentNode.removeChild(ripple);
+                }
+            }, 600);
+        }
+
+        // Touch/Swipe controls for 2048
+        function handleTouchStart(e) {
+            if (!document.getElementById('game-2048').classList.contains('active')) return;
+            
+            const firstTouch = e.touches[0];
+            touchStartX = firstTouch.clientX;
+            touchStartY = firstTouch.clientY;
+        }
+
+        function handleTouchMove(e) {
+            if (!touchStartX || !touchStartY) return;
+            e.preventDefault(); // Prevent scrolling
+        }
+
+        function handleTouchEnd(e) {
+            if (!document.getElementById('game-2048').classList.contains('active')) return;
+            if (!touchStartX || !touchStartY) return;
+
+            touchEndX = e.changedTouches[0].clientX;
+            touchEndY = e.changedTouches[0].clientY;
+
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            const minSwipeDistance = 30;
+
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                // Horizontal swipe
+                if (Math.abs(deltaX) > minSwipeDistance) {
+                    if (deltaX > 0) {
+                        move('right');
+                    } else {
+                        move('left');
+                    }
+                }
+            } else {
+                // Vertical swipe
+                if (Math.abs(deltaY) > minSwipeDistance) {
+                    if (deltaY > 0) {
+                        move('down');
+                    } else {
+                        move('up');
+                    }
+                }
+            }
+
+            // Reset values
+            touchStartX = 0;
+            touchStartY = 0;
+            touchEndX = 0;
+            touchEndY = 0;
+        }
+
+        // Mobile-specific tower defense enhancements
+        function isMobile() {
+            return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+
+        // Enhanced mobile controls
+        document.addEventListener('touchstart', handleTouchStart, { passive: false });
+        document.addEventListener('touchmove', handleTouchMove, { passive: false });
+        document.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+        // Prevent zoom on double tap for game area
+        document.addEventListener('gesturestart', function (e) {
+            e.preventDefault();
+        });
+
+        document.addEventListener('gesturechange', function (e) {
+            e.preventDefault();
+        });
+
+        document.addEventListener('gestureend', function (e) {
+            e.preventDefault();
+        });
+
         // Game switching functionality
         function switchGame(game) {
             document.querySelectorAll('.game-container').forEach(container => {
@@ -492,19 +964,96 @@
         let enemies = [];
         let projectiles = [];
         let path = [];
+        let selectedTower = null;
+        let gameStats = {
+            enemiesKilled: 0,
+            towersBuilt: 0
+        };
         let gameState = {
             lives: 20,
             money: 100,
             wave: 1,
             selectedTower: false,
+            selectedUpgrade: false,
             waveActive: false,
-            enemySpawnTimer: 0
+            enemySpawnTimer: 0,
+            gameOver: false,
+            maxWaves: 10
         };
+
+        // Audio system
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let soundEnabled = true;
+
+        function playSound(frequency, duration, type = 'sine', volume = 0.1) {
+            if (!soundEnabled || !audioContext) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function playTowerPlaceSound() {
+            playSound(440, 0.2, 'square', 0.15);
+        }
+
+        function playUpgradeSound() {
+            playSound(660, 0.3, 'sawtooth', 0.2);
+            setTimeout(() => playSound(880, 0.2, 'sawtooth', 0.15), 100);
+        }
+
+        function playShootSound() {
+            playSound(220, 0.1, 'triangle', 0.08);
+        }
+
+        function playEnemyHitSound() {
+            playSound(150, 0.15, 'square', 0.1);
+        }
+
+        function playEnemyDeathSound() {
+            playSound(300, 0.3, 'sawtooth', 0.12);
+        }
+
+        function playWaveStartSound() {
+            playSound(500, 0.4, 'sine', 0.2);
+            setTimeout(() => playSound(600, 0.3, 'sine', 0.15), 200);
+        }
+
+        function playGameOverSound() {
+            playSound(200, 0.5, 'sawtooth', 0.3);
+            setTimeout(() => playSound(150, 0.5, 'sawtooth', 0.25), 300);
+            setTimeout(() => playSound(100, 1, 'sawtooth', 0.2), 600);
+        }
+
+        function playVictorySound() {
+            const notes = [523, 659, 784, 1047]; // C, E, G, C
+            notes.forEach((note, i) => {
+                setTimeout(() => playSound(note, 0.4, 'sine', 0.2), i * 200);
+            });
+        }
 
         function initTowerDefense() {
             if (renderer) return; // Already initialized
             
             const canvas = document.getElementById('td-canvas');
+            
+            // Mobile-specific canvas sizing
+            if (isMobile()) {
+                canvas.width = Math.min(window.innerWidth - 40, 800);
+                canvas.height = 300;
+            }
             
             // Scene setup
             scene = new THREE.Scene();
@@ -541,11 +1090,101 @@
             ground.receiveShadow = true;
             scene.add(ground);
             
-            // Mouse interaction
+            // Mouse/Touch interaction
             const raycaster = new THREE.Raycaster();
             const mouse = new THREE.Vector2();
             
-            canvas.addEventListener('click', (event) => {
+            function handleCanvasInteraction(event) {
+                const rect = canvas.getBoundingClientRect();
+                let clientX, clientY;
+                let isRightClick = false;
+                
+                if (event.touches) {
+                    // Touch event
+                    clientX = event.touches[0].clientX;
+                    clientY = event.touches[0].clientY;
+                    
+                    // Haptic feedback for mobile
+                    if (navigator.vibrate) {
+                        navigator.vibrate(30);
+                    }
+                } else {
+                    // Mouse event
+                    clientX = event.clientX;
+                    clientY = event.clientY;
+                    isRightClick = event.button === 2;
+                }
+                
+                mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+                
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(scene.children);
+                
+                if (intersects.length > 0) {
+                    const point = intersects[0].point;
+                    
+                    // Check if clicking on a tower for upgrade
+                    const clickedTower = towers.find(tower => 
+                        Math.abs(tower.x - point.x) < 1 && Math.abs(tower.z - point.z) < 1
+                    );
+                    
+                    if (clickedTower && (isRightClick || gameState.selectedUpgrade)) {
+                        upgradeTower(clickedTower);
+                        gameState.selectedUpgrade = false;
+                        document.getElementById('upgrade-btn').classList.remove('selected');
+                        return;
+                    }
+                    
+                    // Place new tower
+                    if (gameState.selectedTower && gameState.money >= 20) {
+                        // Check if not too close to path
+                        let canPlace = true;
+                        for (let pathPoint of path) {
+                            if (Math.abs(point.x - pathPoint.x) < 2 && Math.abs(point.z - pathPoint.z) < 2) {
+                                canPlace = false;
+                                break;
+                            }
+                        }
+                        
+                        // Check if not too close to existing towers
+                        for (let tower of towers) {
+                            if (Math.abs(point.x - tower.x) < 1.5 && Math.abs(point.z - tower.z) < 1.5) {
+                                canPlace = false;
+                                break;
+                            }
+                        }
+                        
+                        if (canPlace) {
+                            createTower(point.x, point.z);
+                            gameState.money -= 20;
+                            gameState.selectedTower = false;
+                            gameStats.towersBuilt++;
+                            updateTDUI();
+                            document.getElementById('tower-btn').classList.remove('selected');
+                            playTowerPlaceSound();
+                            
+                            // Success feedback
+                            if (navigator.vibrate) {
+                                navigator.vibrate([50, 50, 50]);
+                            }
+                        } else {
+                            // Error feedback
+                            if (navigator.vibrate) {
+                                navigator.vibrate(200);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            canvas.addEventListener('click', handleCanvasInteraction);
+            canvas.addEventListener('touchstart', handleCanvasInteraction, { passive: false });
+            canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+            canvas.addEventListener('mousedown', handleCanvasInteraction);
+            
+            // Tower hover effects
+            canvas.addEventListener('mousemove', (event) => {
                 const rect = canvas.getBoundingClientRect();
                 mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
                 mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -553,24 +1192,19 @@
                 raycaster.setFromCamera(mouse, camera);
                 const intersects = raycaster.intersectObjects(scene.children);
                 
-                if (intersects.length > 0 && gameState.selectedTower && gameState.money >= 20) {
+                if (intersects.length > 0) {
                     const point = intersects[0].point;
-                    // Check if not too close to path
-                    let canPlace = true;
-                    for (let pathPoint of path) {
-                        if (Math.abs(point.x - pathPoint.x) < 2 && Math.abs(point.z - pathPoint.z) < 2) {
-                            canPlace = false;
-                            break;
-                        }
-                    }
+                    const hoveredTower = towers.find(tower => 
+                        Math.abs(tower.x - point.x) < 1 && Math.abs(tower.z - point.z) < 1
+                    );
                     
-                    if (canPlace) {
-                        createTower(point.x, point.z);
-                        gameState.money -= 20;
-                        gameState.selectedTower = false;
-                        updateTDUI();
-                        document.getElementById('tower-btn').classList.remove('selected');
+                    if (hoveredTower) {
+                        showTowerInfo(hoveredTower, event.clientX, event.clientY);
+                    } else {
+                        hideTowerInfo();
                     }
+                } else {
+                    hideTowerInfo();
                 }
             });
             
@@ -618,29 +1252,81 @@
                 range: 4,
                 damage: 25,
                 fireRate: 1000,
-                lastFire: 0
+                lastFire: 0,
+                level: 1,
+                cost: 20,
+                upgradeCost: 50
             });
+        }
+
+        function upgradeTower(tower) {
+            if (tower.level >= 5 || gameState.money < tower.upgradeCost) return;
+            
+            gameState.money -= tower.upgradeCost;
+            tower.level++;
+            tower.damage = Math.floor(tower.damage * 1.5);
+            tower.range += 0.5;
+            tower.fireRate = Math.max(200, tower.fireRate - 100);
+            tower.upgradeCost = Math.floor(tower.upgradeCost * 1.4);
+            
+            // Visual upgrade
+            const colors = [0x4169E1, 0x32CD32, 0xFFD700, 0xFF4500, 0x8A2BE2];
+            tower.mesh.material.color.setHex(colors[tower.level - 1]);
+            tower.mesh.scale.set(1 + (tower.level - 1) * 0.2, 1 + (tower.level - 1) * 0.1, 1 + (tower.level - 1) * 0.2);
+            
+            updateTDUI();
+            playUpgradeSound();
+        }
+
+        function showTowerInfo(tower, x, y) {
+            const info = document.getElementById('tower-info');
+            const details = document.getElementById('tower-details');
+            
+            details.innerHTML = `
+                <div><strong>Tower Level ${tower.level}</strong></div>
+                <div>Damage: ${tower.damage}</div>
+                <div>Range: ${tower.range.toFixed(1)}</div>
+                <div>Fire Rate: ${(1000/tower.fireRate).toFixed(1)}/s</div>
+                ${tower.level < 5 ? `<div>Upgrade Cost: ${tower.upgradeCost}</div>` : '<div>MAX LEVEL</div>'}
+            `;
+            
+            info.style.left = (x + 10) + 'px';
+            info.style.top = (y - 10) + 'px';
+            info.style.display = 'block';
+        }
+
+        function hideTowerInfo() {
+            document.getElementById('tower-info').style.display = 'none';
         }
         
         function createEnemy() {
+            const waveMultiplier = 1 + (gameState.wave - 1) * 0.3;
             const enemyGeometry = new THREE.SphereGeometry(0.3, 8, 8);
-            const enemyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF4500 });
+            const enemyMaterial = new THREE.MeshLambertMaterial({ 
+                color: gameState.wave <= 3 ? 0xFF4500 : 
+                       gameState.wave <= 6 ? 0xFF0000 : 
+                       gameState.wave <= 8 ? 0x8B008B : 0x000000
+            });
             const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
             enemy.position.set(path[0].x, 0.3, path[0].z);
             enemy.castShadow = true;
             scene.add(enemy);
             
+            const baseHealth = 50;
+            const health = Math.floor(baseHealth * waveMultiplier);
+            
             enemies.push({
                 mesh: enemy,
-                health: 50 + (gameState.wave * 10),
-                maxHealth: 50 + (gameState.wave * 10),
-                speed: 0.02,
+                health: health,
+                maxHealth: health,
+                speed: 0.02 * (gameState.wave <= 5 ? 1 : 1 + (gameState.wave - 5) * 0.2),
                 pathIndex: 0,
-                progress: 0
+                progress: 0,
+                reward: 10 + gameState.wave
             });
         }
         
-        function createProjectile(startPos, targetPos) {
+        function createProjectile(startPos, targetPos, damage) {
             const projectileGeometry = new THREE.SphereGeometry(0.1, 4, 4);
             const projectileMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFF00 });
             const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
@@ -653,25 +1339,108 @@
                 mesh: projectile,
                 direction: direction,
                 speed: 0.3,
-                damage: 25
+                damage: damage || 25
             });
         }
         
         function selectTower() {
             gameState.selectedTower = !gameState.selectedTower;
+            gameState.selectedUpgrade = false;
+            
             const btn = document.getElementById('tower-btn');
+            const upgradeBtn = document.getElementById('upgrade-btn');
+            
             if (gameState.selectedTower) {
                 btn.classList.add('selected');
             } else {
                 btn.classList.remove('selected');
             }
+            upgradeBtn.classList.remove('selected');
+        }
+
+        function selectUpgrade() {
+            gameState.selectedUpgrade = !gameState.selectedUpgrade;
+            gameState.selectedTower = false;
+            
+            const btn = document.getElementById('upgrade-btn');
+            const towerBtn = document.getElementById('tower-btn');
+            
+            if (gameState.selectedUpgrade) {
+                btn.classList.add('selected');
+            } else {
+                btn.classList.remove('selected');
+            }
+            towerBtn.classList.remove('selected');
         }
         
         function startWave() {
-            if (!gameState.waveActive) {
+            if (!gameState.waveActive && !gameState.gameOver) {
                 gameState.waveActive = true;
                 gameState.enemySpawnTimer = 0;
+                playWaveStartSound();
+                updateDifficultyDisplay();
             }
+        }
+
+        function updateDifficultyDisplay() {
+            const difficultyElement = document.getElementById('difficulty');
+            const waveDisplay = document.getElementById('wave-display');
+            
+            waveDisplay.textContent = gameState.wave;
+            
+            if (gameState.wave <= 3) {
+                difficultyElement.textContent = 'Easy';
+                difficultyElement.style.background = 'linear-gradient(45deg, #4CAF50, #45a049)';
+            } else if (gameState.wave <= 6) {
+                difficultyElement.textContent = 'Medium';
+                difficultyElement.style.background = 'linear-gradient(45deg, #FF9800, #F57C00)';
+            } else if (gameState.wave <= 8) {
+                difficultyElement.textContent = 'Hard';
+                difficultyElement.style.background = 'linear-gradient(45deg, #FF5722, #D84315)';
+            } else {
+                difficultyElement.textContent = 'EXTREME';
+                difficultyElement.style.background = 'linear-gradient(45deg, #9C27B0, #7B1FA2)';
+            }
+        }
+
+        function showGameOver() {
+            gameState.gameOver = true;
+            playGameOverSound();
+            
+            document.getElementById('final-wave').textContent = gameState.wave - 1;
+            document.getElementById('enemies-killed').textContent = gameStats.enemiesKilled;
+            document.getElementById('towers-built').textContent = gameStats.towersBuilt;
+            
+            document.getElementById('game-over-modal').style.display = 'flex';
+        }
+
+        function showVictory() {
+            playVictorySound();
+            
+            document.getElementById('final-wave').textContent = gameState.maxWaves;
+            document.getElementById('enemies-killed').textContent = gameStats.enemiesKilled;
+            document.getElementById('towers-built').textContent = gameStats.towersBuilt;
+            
+            const modal = document.getElementById('game-over-modal');
+            const content = modal.querySelector('.game-over-content');
+            content.innerHTML = `
+                <h2>🎉 VICTORY!</h2>
+                <div class="game-over-stats">
+                    <p>You completed all <strong>${gameState.maxWaves}</strong> waves!</p>
+                    <p>Enemies defeated: <strong>${gameStats.enemiesKilled}</strong></p>
+                    <p>Towers built: <strong>${gameStats.towersBuilt}</strong></p>
+                    <p><strong>You are a Tower Defense Master!</strong></p>
+                </div>
+                <button class="new-game-btn" onclick="closeGameOver()">Play Again</button>
+            `;
+            content.style.background = 'linear-gradient(135deg, #4CAF50, #45a049)';
+            
+            modal.style.display = 'flex';
+        }
+
+        function closeGameOver() {
+            document.getElementById('game-over-modal').style.display = 'none';
+            resetTD();
         }
         
         function resetTD() {
@@ -683,50 +1452,94 @@
             towers = [];
             enemies = [];
             projectiles = [];
+            selectedTower = null;
             
             gameState.lives = 20;
             gameState.money = 100;
             gameState.wave = 1;
             gameState.waveActive = false;
             gameState.selectedTower = false;
+            gameState.selectedUpgrade = false;
             gameState.enemySpawnTimer = 0;
+            gameState.gameOver = false;
+            
+            gameStats.enemiesKilled = 0;
+            gameStats.towersBuilt = 0;
+            
+            // Reset modal styling
+            const modal = document.getElementById('game-over-modal');
+            const content = modal.querySelector('.game-over-content');
+            content.style.background = 'linear-gradient(135deg, #ff416c, #ff4757)';
+            content.innerHTML = `
+                <h2>💀 GAME OVER</h2>
+                <div class="game-over-stats">
+                    <p>You survived <strong id="final-wave">0</strong> waves!</p>
+                    <p>Enemies defeated: <strong id="enemies-killed">0</strong></p>
+                    <p>Towers built: <strong id="towers-built">0</strong></p>
+                </div>
+                <button class="new-game-btn" onclick="closeGameOver()">Play Again</button>
+            `;
             
             updateTDUI();
+            updateDifficultyDisplay();
+            hideTowerInfo();
+            
+            // Reset button states
+            document.getElementById('tower-btn').classList.remove('selected');
+            document.getElementById('upgrade-btn').classList.remove('selected');
         }
         
         function updateTDUI() {
             document.getElementById('lives').textContent = gameState.lives;
             document.getElementById('money').textContent = gameState.money;
             document.getElementById('wave').textContent = gameState.wave;
+            
+            // Update upgrade button state
+            const upgradeBtn = document.getElementById('upgrade-btn');
+            const hasAffordableUpgrade = towers.some(tower => 
+                tower.level < 5 && gameState.money >= tower.upgradeCost
+            );
+            
+            upgradeBtn.disabled = !hasAffordableUpgrade;
+            
+            if (gameState.lives <= 0 && !gameState.gameOver) {
+                showGameOver();
+            }
         }
         
         function animate() {
             requestAnimationFrame(animate);
             
-            if (!renderer) return;
+            if (!renderer || gameState.gameOver) return;
             
             // Spawn enemies
             if (gameState.waveActive) {
                 gameState.enemySpawnTimer++;
-                if (gameState.enemySpawnTimer % 60 === 0 && enemies.length < gameState.wave * 5) {
+                const spawnRate = Math.max(30, 60 - gameState.wave * 3);
+                const maxEnemies = Math.min(20, gameState.wave * 3 + 2);
+                
+                if (gameState.enemySpawnTimer % spawnRate === 0 && enemies.length < maxEnemies) {
                     createEnemy();
                 }
                 
                 if (enemies.length === 0 && gameState.enemySpawnTimer > 300) {
+                    if (gameState.wave >= gameState.maxWaves) {
+                        showVictory();
+                        return;
+                    }
+                    
                     gameState.wave++;
                     gameState.waveActive = false;
                     gameState.enemySpawnTimer = 0;
-                    gameState.money += 50;
+                    gameState.money += 50 + (gameState.wave * 10);
                     updateTDUI();
+                    updateDifficultyDisplay();
                 }
             }
             
             // Move enemies
             enemies.forEach((enemy, enemyIndex) => {
                 if (enemy.pathIndex < path.length - 1) {
-                    const currentPoint = path[enemy.pathIndex];
-                    const nextPoint = path[enemy.pathIndex + 1];
-                    
                     enemy.progress += enemy.speed;
                     
                     if (enemy.progress >= 1) {
@@ -747,6 +1560,10 @@
                     enemies.splice(enemyIndex, 1);
                     gameState.lives--;
                     updateTDUI();
+                    
+                    if (gameState.lives <= 0) {
+                        showGameOver();
+                    }
                 }
             });
             
@@ -773,9 +1590,11 @@
                     if (nearestEnemy) {
                         createProjectile(
                             new THREE.Vector3(tower.x, 2, tower.z),
-                            nearestEnemy.mesh.position.clone()
+                            nearestEnemy.mesh.position.clone(),
+                            tower.damage
                         );
                         tower.lastFire = now;
+                        playShootSound();
                     }
                 }
             });
@@ -791,6 +1610,19 @@
                     const distance = projectile.mesh.position.distanceTo(enemy.mesh.position);
                     if (distance < 0.5) {
                         enemy.health -= projectile.damage;
+                        playEnemyHitSound();
+                        
+                        // Visual damage feedback
+                        enemy.mesh.material.color.lerp(new THREE.Color(0xFFFFFF), 0.5);
+                        setTimeout(() => {
+                            if (enemy.mesh.parent) {
+                                enemy.mesh.material.color.setHex(
+                                    gameState.wave <= 3 ? 0xFF4500 : 
+                                    gameState.wave <= 6 ? 0xFF0000 : 
+                                    gameState.wave <= 8 ? 0x8B008B : 0x000000
+                                );
+                            }
+                        }, 100);
                         
                         // Remove projectile
                         scene.remove(projectile.mesh);
@@ -800,8 +1632,10 @@
                         if (enemy.health <= 0) {
                             scene.remove(enemy.mesh);
                             enemies.splice(enemyIndex, 1);
-                            gameState.money += 10;
+                            gameState.money += enemy.reward;
+                            gameStats.enemiesKilled++;
                             updateTDUI();
+                            playEnemyDeathSound();
                         }
                     }
                 });
