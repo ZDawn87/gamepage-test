@@ -1,445 +1,4 @@
-function animate() {
-            requestAnimationFrame(animate);
-            
-            if (!renderer || gameStateTD.gameOver || gameStateTD.paused) return;
-            
-            // Enhanced wave spawning system - Faster spawning for shorter waves
-            if (gameStateTD.waveActive) {
-                gameStateTD.enemySpawnTimer++;
-                
-                // Faster spawn rate for quicker waves
-                const wave = Math.min(gameStateTD.wave, 15);
-                const config = WAVE_CONFIG[wave];
-                const spawnInterval = Math.max(15, 45 - gameStateTD.wave * 2); // Much faster spawning
-                
-                // Spawn enemies until wave quota is met
-                if (gameStateTD.enemySpawnTimer % spawnInterval === 0 && 
-                    waveEnemiesSpawned < config.enemies) {
-                    createEnemy();
-                    waveEnemiesSpawned++;
-                    waveEnemiesRemaining--;
-                    updateWaveDisplay();
-                }
-                
-                // Check for wave completion
-                if (waveEnemiesSpawned >= config.enemies && enemies.length === 0) {
-                    completeWave();
-                }
-            }
-            
-            // Move enemies with enhanced visuals
-            enemies.forEach((enemy, enemyIndex) => {
-                if (enemy.pathIndex < path.length - 1) {
-                    enemy.progress += enemy.speed;
-                    
-                    // Add rotation based on enemy type
-                    if (enemy.type === 'elite' || enemy.type === 'champion') {
-                        enemy.mesh.rotation.y += 0.05;
-                    } else if (enemy.type === 'overlord' || enemy.type === 'demon') {
-                        enemy.mesh.rotation.x += 0.03;
-                        enemy.mesh.rotation.z += 0.02;
-                    } else if (enemy.wave >= 10) {
-                        enemy.mesh.rotation.y += 0.08;
-                        enemy.mesh.rotation.x += 0.04;
-                    }
-                    
-                    // Add floating motion for higher-tier enemies
-                    if (enemy.wave >= 6) {
-                        enemy.mesh.position.y = enemy.size + Math.sin(Date.now() * 0.005 + enemyIndex) * 0.1;
-                    }
-                    
-                    if (enemy.progress >= 1) {
-                        enemy.pathIndex++;
-                        enemy.progress = 0;
-                    }
-                    
-                    if (enemy.pathIndex < path.length - 1) {
-                        const current = path[enemy.pathIndex];
-                        const next = path[enemy.pathIndex + 1];
-                        
-                        enemy.mesh.position.x = current.x + (next.x - current.x) * enemy.progress;
-                        enemy.mesh.position.z = current.z + (next.z - current.z) * enemy.progress;
-                    }
-                } else {
-                    // Enemy reached end
-                    scene.remove(enemy.mesh);
-                    enemies.splice(enemyIndex, 1);
-                    gameStateTD.lives--;
-                    updateTDUI();
-                    
-                    // Show damage effect
-                    showDamageEffect();
-                    
-                    if (gameStateTD.lives <= 0) {
-                        showGameOverTD();
-                    }
-                }
-            });
-            
-            // Tower shooting with enhanced targeting
-            towers.forEach(tower => {
-                const now = Date.now();
-                if (now - tower.lastFire > tower.fireRate) {
-                    // Prioritize stronger enemies (higher wave number)
-                    let bestTarget = null;
-                    let bestPriority = -1;
-                    
-                    enemies.forEach(enemy => {
-                        const distance = Math.sqrt(
-                            Math.pow(enemy.mesh.position.x - tower.x, 2) +
-                            Math.pow(enemy.mesh.position.z - tower.z, 2)
-                        );
-                        
-                        if (distance <= tower.range) {
-                            // Priority system: higher wave enemies get priority
-                            const priority = enemy.wave * 100 + (tower.range - distance) * 10;
-                            if (priority > bestPriority) {
-                                bestTarget = enemy;
-                                bestPriority = priority;
-                            }
-                        }
-                    });
-                    
-                    if (bestTarget) {
-                        createProjectile(
-                            new THREE.Vector3(tower.x, 2, tower.z),
-                            bestTarget.mesh.position.clone(),
-                            tower.damage
-                        );
-                        tower.lastFire = now;
-                        playSound(220, 0.1, 'triangle', 0.08);
-                        
-                        // Visual muzzle flash for higher level towers
-                        if (tower.level >= 3) {
-                            createMuzzleFlash(tower);
-                        }
-                    }
-                }
-            });
-            
-            // Enhanced projectile system
-            projectiles.forEach((projectile, projectileIndex) => {
-                projectile.mesh.position.add(
-                    projectile.direction.clone().multiplyScalar(projectile.speed)
-                );
-                
-                // Add projectile trail for higher damage projectiles
-                if (projectile.damage > 50) {
-                    createProjectileTrail(projectile.mesh.position);
-                }
-                
-                // Check collision with enemies
-                enemies.forEach((enemy, enemyIndex) => {
-                    const distance = projectile.mesh.position.distanceTo(enemy.mesh.position);
-                    if (distance < 0.5) {
-                        const damage = projectile.damage;
-                        enemy.health -= damage;
-                        
-                        // Enhanced hit effects based on enemy type
-                        createHitEffect(enemy.mesh.position, enemy.type, damage);
-                        playSound(150, 0.15, 'square', 0.1);
-                        
-                        // Remove projectile
-                        scene.remove(projectile.mesh);
-                        projectiles.splice(projectileIndex, 1);
-                        
-                        // Remove enemy if dead
-                        if (enemy.health <= 0) {
-                            createDeathEffect(enemy.mesh.position, enemy.type);
-                            scene.remove(enemy.mesh);
-                            enemies.splice(enemyIndex, 1);
-                            gameStateTD.money += enemy.reward;
-                            gameStatsTD.enemiesKilled++;
-                            gameStatsTD.score += enemy.reward * 10 * gameStateTD.wave; // Wave multiplier for score
-                            updateTDUI();
-                            playSound(300, 0.3, 'sawtooth', 0.12);
-                        }
-                    }
-                });
-                
-                // Remove projectiles that are too far
-                if (projectile.mesh.position.length() > 50) {
-                    scene.remove(projectile.mesh);
-                    projectiles.splice(projectileIndex, 1);
-                }
-            });
-            
-            renderer.render(scene, camera);
-        }
-
-        function completeWave() {
-            gameStateTD.waveActive = false;
-            gameStateTD.enemySpawnTimer = 0;
-            
-            // Check for game completion
-            if (gameStateTD.wave >= gameStateTD.maxWaves) {
-                showVictoryTD();
-                return;
-            }
-            
-            // Wave completion bonus
-            const waveBonus = 50 + (gameStateTD.wave * 15);
-            gameStateTD.money += waveBonus;
-            gameStateTD.wave++;
-            
-            // Show wave completion message
-            showWaveCompleteMessage(waveBonus);
-            
-            updateTDUI();
-            updateWaveDisplay();
-        }
-
-        function showWaveCompleteMessage(bonus) {
-            const message = document.createElement('div');
-            message.style.cssText = `
-                position: fixed;
-                top: 20%;
-                right: 20px;
-                background: linear-gradient(45deg, #4CAF50, #45a049);
-                color: white;
-                padding: 20px;
-                border-radius: 15px;
-                font-weight: bold;
-                font-size: 18px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                z-index: 2000;
-                animation: slideInRight 0.5s ease-out;
-                backdrop-filter: blur(10px);
-            `;
-            
-            message.innerHTML = `
-                <div>🎉 Wave ${gameStateTD.wave - 1} Complete!</div>
-                <div style="font-size: 14px; margin-top: 5px;">Bonus: +${bonus}</div>
-            `;
-            
-            document.body.appendChild(message);
-            
-            setTimeout(() => {
-                if (message.parentNode) {
-                    message.style.animation = 'slideOutRight 0.5s ease-out';
-                    setTimeout(() => {
-                        if (message.parentNode) {
-                            message.parentNode.removeChild(message);
-                        }
-                    }, 500);
-                }
-            }, 3000);
-        }
-
-        // Enhanced visual effects
-        function createMuzzleFlash(tower) {
-            const flashGeometry = new THREE.SphereGeometry(0.2, 4, 4);
-            const flashMaterial = new THREE.MeshBasicMaterial({ 
-                color: 0xFFFF00, 
-                transparent: true, 
-                opacity: 0.8 
-            });
-            const flash = new THREE.Mesh(flashGeometry, flashMaterial);
-            flash.position.set(tower.x, 2.5, tower.z);
-            scene.add(flash);
-            
-            setTimeout(() => {
-                scene.remove(flash);
-            }, 100);
-        }
-
-        function createHitEffect(position, enemyType, damage) {
-            const hitGeometry = new THREE.SphereGeometry(0.15, 6, 6);
-            const hitMaterial = new THREE.MeshBasicMaterial({ 
-                color: damage > 100 ? 0xFF0000 : 0xFFAA00, 
-                transparent: true, 
-                opacity: 0.9 
-            });
-            const hit = new THREE.Mesh(hitGeometry, hitMaterial);
-            hit.position.copy(position);
-            scene.add(hit);
-            
-            // Animate hit effect
-            let scale = 0;
-            const animate = () => {
-                scale += 0.1;
-                hit.scale.setScalar(scale);
-                hit.material.opacity = 1 - (scale / 3);
-                
-                if (scale < 3) {
-                    requestAnimationFrame(animate);
-                } else {
-                    scene.remove(hit);
-                }
-            };
-            animate();
-        }
-
-        function createDeathEffect(position, enemyType) {
-            // Create multiple particles for death effect
-            for (let i = 0; i < 5; i++) {
-                const particleGeometry = new THREE.SphereGeometry(0.05, 4, 4);
-                const particleMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0xFF4500, 
-                    transparent: true, 
-                    opacity: 1 
-                });
-                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
-                particle.position.copy(position);
-                
-                // Random velocity
-                const velocity = {
-                    x: (Math.random() - 0.5) * 0.2,
-                    y: Math.random() * 0.3 + 0.1,
-                    z: (Math.random() - 0.5) * 0.2
-                };
-                
-                scene.add(particle);
-                
-                // Animate particle
-                let life = 1;
-                const animateParticle = () => {
-                    life -= 0.02;
-                    particle.position.x += velocity.x;
-                    particle.position.y += velocity.y;
-                    particle.position.z += velocity.z;
-                    velocity.y -= 0.01; // Gravity
-                    particle.material.opacity = life;
-                    
-                    if (life > 0) {
-                        requestAnimationFrame(animateParticle);
-                    } else {
-                        scene.remove(particle);
-                    }
-                };
-                animateParticle();
-            }
-        }
-
-        function showDamageEffect() {
-            // Screen flash effect when player takes damage
-            const flash = document.createElement('div');
-            flash.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(255, 0, 0, 0.3);
-                pointer-events: none;
-                z-index: 1999;
-                animation: damageFlash 0.3s ease-out;
-            `;
-            
-            document.body.appendChild(flash);
-            
-            setTimeout(() => {
-                if (flash.parentNode) {
-                    flash.parentNode.removeChild(flash);
-                }
-            }, 300);
-        }
-
-        // Add CSS animations
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideInRight {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            @keyframes slideOutRight {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-            @keyframes damageFlash {
-                0% { opacity: 0; }
-                50% { opacity: 1; }
-                100% { opacity: 0; }
-            }
-        `;
-        document.head.appendChild(style);
-
-        function updateDifficultyDisplay() {
-            const wave = Math.min(gameStateTD.wave, 15);
-            const config = WAVE_CONFIG[wave];
-            const difficultyElement = document.getElementById('difficulty');
-            const waveDisplay = document.getElementById('wave-display');
-            
-            waveDisplay.textContent = `${gameStateTD.wave}`;
-            
-            const difficultyColors = {
-                easy: 'linear-gradient(45deg, #4CAF50, #45a049)',
-                normal: 'linear-gradient(45deg, #FF9800, #F57C00)',
-                hard: 'linear-gradient(45deg, #FF5722, #D84315)',
-                nightmare: 'linear-gradient(45deg, #9C27B0, #7B1FA2)'
-            };
-            
-            difficultyElement.textContent = `${gameStateTD.difficulty.toUpperCase()} - ${config.name}`;
-            difficultyElement.style.background = difficultyColors[gameStateTD.difficulty];
-        }
-
-        function resetTD() {
-            // Clear arrays
-            towers.forEach(tower => scene.remove(tower.mesh));
-            enemies.forEach(enemy => scene.remove(enemy.mesh));
-            projectiles.forEach(projectile => scene.remove(projectile.mesh));
-            
-            towers = [];
-            enemies = [];
-            projectiles = [];
-            selectedTower = null;
-            
-            // Reset game state based on difficulty
-            const settings = {
-                easy: { lives: 25, money: 150 },
-                normal: { lives: 20, money: 100 },
-                hard: { lives: 15, money: 75 },
-                nightmare: { lives: 10, money: 50 }
-            };
-            
-            const setting = settings[gameStateTD.difficulty];
-            gameStateTD.lives = setting.lives;
-            gameStateTD.money = setting.money;
-            gameStateTD.wave = 1;
-            gameStateTD.waveActive = false;
-            gameStateTD.selectedTower = false;
-            gameStateTD.selectedUpgrade = false;
-            gameStateTD.enemySpawnTimer = 0;
-            gameStateTD.gameOver = false;
-            gameStateTD.paused = false;
-            gameStateTD.startTime = Date.now();
-            
-            gameStatsTD.enemiesKilled = 0;
-            gameStatsTD.towersBuilt = 0;
-            gameStatsTD.score = 0;
-            
-            // Reset wave counters
-            resetWaveCounters();
-            
-            updateTDUI();
-            updateDifficultyDisplay();
-            hideTowerInfo();
-            
-            // Reset pause overlay
-            document.getElementById('pause-td').classList.remove('active');
-            
-            // Reset button states
-            document.getElementById('tower-btn').classList.remove('selected');
-            document.getElementById('upgrade-btn').classList.remove('selected');
-        }
-
-        function showTowerInfo(tower, x, y) {
-            const info = document.getElementById('tower-info');
-            const details = document.getElementById('tower-details');
-            
-            details.innerHTML = `
-                <div><strong>Tower Level ${tower.level}</strong></div>
-                <div>💥 Damage: ${tower.damage}</div>
-                <div>🎯 Range: ${tower.range.toFixed(1)}</div>
-                <div>⚡ Fire Rate: ${(1000/tower.fireRate).toFixed(1)}/s</div>
-                <div>💰 Total Value: ${tower.cost + (tower.level - 1) * 50}</div>
-                ${tower.level < 5 ? `<div>🔧 Upgrade Cost: ${tower.upgradeCost}</div>` : '<div>🌟 MAX LEVEL</div>'}
-            `;
-            
-            info.style.left = Math.min(x + 10, window.innerWidth - 200) + 'px';
-            info.style.top = Math.max(y - 10, 10) + 'px';
-            info.style.display = 'block';
-        }<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -448,7 +7,7 @@ function animate() {
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#667eea">
-    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiVWx0aW1hdGUgR2FtaW5nIEh1YiIsInNob3J0X25hbWUiOiJHYW1pbmdIdWIiLCJzdGFydF91cmwiOiIvIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzY2N2VlYSIsInRoZW1lX2NvbG9yIjoiIzY2N2VlYSIsImljb25zIjpbeyJzcmMiOiJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUI3YVdSMGFEMGlOVEV5SWlCb1pXbG5hSFE5SWpVeE1pSWdkbWxsZDBKdmVEMGlNQ0F3SURORE1pQTFNVElpSUdacGJHdzlJaU5tWmpaaVpUSmhJaUJ5WldOME9TSXlOallpSUhKNE9TSXpJaUJqYkdGemN6MGlhV05MYzNZaVBqeHlaV04wSUhkcFpIUm9QU0l6TnpZaUlHaGxhV2RvZEQwaU16YzJJaUJtYVd4c1BTSWpORFU1TVVjeklpOCtQSFJsZUhRZ2VEMGlNelE0SWlCNVBTSTBOVFlpSUdacGJHdzlJaU5HUmtaR1JqQWlJR1p2Ym5RdGMybDZaVDBpTkRnaUlHWnZiblF0ZDJWcFoyaDBQU0ppYjJ4a0lpQjBaWGgwTFdGdVkyaHZjajBpYldsa1pHeGxJajVIWVcxbGN6dzZlblErUEM5MFpYaDBQand2YzNabkdFSS9Pbj0iLCJzaXplcyI6IjUxMng1MTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiVWx0aW1hdGUgR2FtaW5nIEh1YiIsInNob3J0X25hbWUiOiJHYW1pbmdIdWIiLCJzdGFydF91cmwiOiIvIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzY2N2VlYSIsInRoZW1lX2NvbG9yIjoiIzY2N2VlYSIsImljb25zIjpbeyJzcmMiOiJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUI3YVdSMGFEMGlOVEV5SWlCb1pXbG5hSFE5SWpVeE1pSWdkbWxsZDBKdmVEMGlNQ0F3SURORE1pQTFNVElpSUdacGJHdzlJaU5tWmpaaVpUSmhJaUJ5WldOME9TSXlOalppSUhKNE9TSXpJaUJqYkdGemN6MGlhV05MYzNZaVBqeHlaV04wSUhkcFpIUm9QU0l6TnpZaUlHaGxhV2RvZEQwaU16YzJJaUJtYVd4c1BTSWpORFU1TVVjeklpOCtQSFJsZUhRZ2VEMGlNelE0SWlCNVBTSTBOVFlpSUdacGJHdzlJaU5HUmtaR1JqQWlJR1p2Ym5RdGMybDZaVDBpTkRnaUlHWnZiblF0ZDJWcFoyaDBQU0ppYjJ4a0lpQjBaWGgwTFdGdVkyaHZjajBpYldsa1pHeGxJajVIWVcxbGN6dzZlblErUEM5MFpYaDBQand2YzNabkdFSS9Pbj0iLCJzaXplcyI6IjUxMng1MTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
     <title>Enhanced Gaming Hub - 2048 & Tower Defense 3D</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
@@ -642,7 +201,7 @@ function animate() {
             backdrop-filter: blur(10px);
         }
 
-        /* 2048 Styles - Fixed centering */
+        /* 2048 Styles - Fixed centering and container */
         .game-2048 {
             display: flex;
             flex-direction: column;
@@ -679,17 +238,20 @@ function animate() {
             100% { background: rgba(255,255,255,0.2); }
         }
 
+        /* Fixed 2048 Grid Container */
         .grid-2048 {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 15px;
-            background: rgba(0,0,0,0.3);
-            padding: 20px;
+            background: rgba(0,0,0,0.4);
+            padding: 25px;
             border-radius: 20px;
             backdrop-filter: blur(10px);
             position: relative;
             margin: 0 auto;
-            justify-self: center;
+            width: fit-content;
+            border: 3px solid rgba(255,255,255,0.3);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
         }
 
         .tile {
@@ -1271,10 +833,8 @@ function animate() {
             
             .grid-2048 {
                 gap: 10px;
-                padding: 15px;
+                padding: 20px;
                 max-width: 320px;
-                margin: 0 auto;
-                justify-self: center;
             }
 
             .mobile-controls {
@@ -1364,10 +924,8 @@ function animate() {
 
             .grid-2048 {
                 gap: 8px;
-                padding: 12px;
+                padding: 15px;
                 max-width: 280px;
-                margin: 0 auto;
-                justify-self: center;
             }
 
             .score-board {
@@ -1389,6 +947,21 @@ function animate() {
                 font-size: 14px;
                 padding: 8px;
             }
+        }
+
+        /* Additional animations for wave progress */
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        @keyframes damageFlash {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
         }
     </style>
 </head>
@@ -2026,7 +1599,6 @@ function animate() {
             grid.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
             
             const tileSize = gridSize === 3 ? 90 : gridSize === 5 ? 70 : 100;
-            grid.style.maxWidth = `${(tileSize + 15) * gridSize + 5}px`;
             
             for(let i = 0; i < gridSize; i++) {
                 for(let j = 0; j < gridSize; j++) {
@@ -2371,7 +1943,7 @@ function animate() {
             document.getElementById('pause-2048').classList.remove('active');
         }
 
-        // Enhanced Tower Defense Game Logic
+        // Enhanced Tower Defense Game Logic with Better Wave Tracking
         let scene, camera, renderer;
         let towers = [];
         let enemies = [];
@@ -2398,6 +1970,61 @@ function animate() {
             startTime: 0
         };
 
+        // Enhanced Wave Tracking System
+        let waveManager = {
+            currentWave: 1,
+            enemiesSpawned: 0,
+            enemiesToSpawn: 0,
+            enemiesRemaining: 0,
+            spawnTimer: 0,
+            waveInProgress: false,
+            waveComplete: false,
+            spawnInterval: 60
+        };
+
+        function resetWaveManager() {
+            const wave = Math.min(gameStateTD.wave, 15);
+            const config = WAVE_CONFIG[wave];
+            
+            waveManager.currentWave = gameStateTD.wave;
+            waveManager.enemiesSpawned = 0;
+            waveManager.enemiesToSpawn = config.enemies;
+            waveManager.enemiesRemaining = config.enemies;
+            waveManager.spawnTimer = 0;
+            waveManager.waveInProgress = false;
+            waveManager.waveComplete = false;
+            waveManager.spawnInterval = Math.max(30, 60 - gameStateTD.wave * 2);
+            
+            updateWaveDisplay();
+        }
+
+        function updateWaveDisplay() {
+            const waveDisplay = document.getElementById('wave-display');
+            const difficultyElement = document.getElementById('difficulty');
+            
+            // Enhanced wave display with progress
+            if (waveManager.waveInProgress) {
+                const spawned = waveManager.enemiesSpawned;
+                const total = waveManager.enemiesToSpawn;
+                const alive = enemies.length;
+                waveDisplay.textContent = `${gameStateTD.wave} | Spawned: ${spawned}/${total} | Alive: ${alive}`;
+            } else {
+                waveDisplay.textContent = `${gameStateTD.wave} (Ready)`;
+            }
+            
+            const wave = Math.min(gameStateTD.wave, 15);
+            const config = WAVE_CONFIG[wave];
+            const difficultyColors = {
+                easy: 'linear-gradient(45deg, #4CAF50, #45a049)',
+                normal: 'linear-gradient(45deg, #FF9800, #F57C00)',
+                hard: 'linear-gradient(45deg, #FF5722, #D84315)',
+                nightmare: 'linear-gradient(45deg, #9C27B0, #7B1FA2)'
+            };
+            
+            difficultyElement.textContent = `${gameStateTD.difficulty.toUpperCase()} - ${config.name}`;
+            difficultyElement.style.background = difficultyColors[gameStateTD.difficulty];
+        }
+
         function setDifficultyTD(diff) {
             gameStateTD.difficulty = diff;
             
@@ -2420,10 +2047,6 @@ function animate() {
             
             resetTD();
         }
-
-        // Enhanced wave management system
-        let waveEnemiesSpawned = 0;
-        let waveEnemiesRemaining = 0;
 
         function initTowerDefense() {
             if (renderer) return; // Already initialized
@@ -2472,7 +2095,7 @@ function animate() {
             scene.add(ground);
             
             // Initialize wave system
-            resetWaveCounters();
+            resetWaveManager();
             gameStateTD.startTime = Date.now();
             
             // Mouse/Touch interaction
@@ -2480,43 +2103,16 @@ function animate() {
             animate();
         }
 
-        function resetWaveCounters() {
-            const wave = Math.min(gameStateTD.wave, 15);
-            const config = WAVE_CONFIG[wave];
-            waveEnemiesSpawned = 0;
-            waveEnemiesRemaining = config.enemies;
-            updateWaveDisplay();
-        }
-
-        function updateWaveDisplay() {
-            const wave = Math.min(gameStateTD.wave, 15);
-            const config = WAVE_CONFIG[wave];
-            const waveDisplay = document.getElementById('wave-display');
-            const difficultyElement = document.getElementById('difficulty');
-            
-            waveDisplay.textContent = `${gameStateTD.wave} (${waveEnemiesRemaining}/${config.enemies})`;
-            
-            const difficultyColors = {
-                easy: 'linear-gradient(45deg, #4CAF50, #45a049)',
-                normal: 'linear-gradient(45deg, #FF9800, #F57C00)',
-                hard: 'linear-gradient(45deg, #FF5722, #D84315)',
-                nightmare: 'linear-gradient(45deg, #9C27B0, #7B1FA2)'
-            };
-            
-            difficultyElement.textContent = `${gameStateTD.difficulty.toUpperCase()} - ${config.name}`;
-            difficultyElement.style.background = difficultyColors[gameStateTD.difficulty];
-        }
-
         function startWave() {
-            if (!gameStateTD.waveActive && !gameStateTD.gameOver && !gameStateTD.paused) {
-                gameStateTD.waveActive = true;
-                gameStateTD.enemySpawnTimer = 0;
-                resetWaveCounters();
-                playSound(500, 0.4, 'sine', 0.2); // Wave start sound
-                updateWaveDisplay();
+            if (!waveManager.waveInProgress && !gameStateTD.gameOver && !gameStateTD.paused) {
+                waveManager.waveInProgress = true;
+                waveManager.spawnTimer = 0;
+                resetWaveManager();
+                waveManager.waveInProgress = true; // Set again after reset
                 
-                // Show wave announcement
+                playSound(500, 0.4, 'sine', 0.2); // Wave start sound
                 showWaveAnnouncement();
+                updateWaveDisplay();
             }
         }
 
@@ -2532,7 +2128,7 @@ function animate() {
                 left: 50%;
                 transform: translate(-50%, -50%);
                 background: linear-gradient(45deg, rgba(0,0,0,0.9), rgba(50,50,50,0.9));
-                color: ${config.color.toString(16).padStart(6, '0')};
+                color: #${config.color.toString(16).padStart(6, '0')};
                 padding: 30px 50px;
                 border-radius: 20px;
                 text-align: center;
@@ -2756,14 +2352,15 @@ function animate() {
             
             details.innerHTML = `
                 <div><strong>Tower Level ${tower.level}</strong></div>
-                <div>Damage: ${tower.damage}</div>
-                <div>Range: ${tower.range.toFixed(1)}</div>
-                <div>Fire Rate: ${(1000/tower.fireRate).toFixed(1)}/s</div>
-                ${tower.level < 5 ? `<div>Upgrade Cost: ${tower.upgradeCost}</div>` : '<div>MAX LEVEL</div>'}
+                <div>💥 Damage: ${tower.damage}</div>
+                <div>🎯 Range: ${tower.range.toFixed(1)}</div>
+                <div>⚡ Fire Rate: ${(1000/tower.fireRate).toFixed(1)}/s</div>
+                <div>💰 Total Value: ${tower.cost + (tower.level - 1) * 50}</div>
+                ${tower.level < 5 ? `<div>🔧 Upgrade Cost: ${tower.upgradeCost}</div>` : '<div>🌟 MAX LEVEL</div>'}
             `;
             
-            info.style.left = (x + 10) + 'px';
-            info.style.top = (y - 10) + 'px';
+            info.style.left = Math.min(x + 10, window.innerWidth - 200) + 'px';
+            info.style.top = Math.max(y - 10, 10) + 'px';
             info.style.display = 'block';
         }
 
@@ -2771,27 +2368,27 @@ function animate() {
             document.getElementById('tower-info').style.display = 'none';
         }
         
-        // Wave configuration system - Shorter waves with fewer enemies
+        // Wave configuration system with enhanced tracking
         const WAVE_CONFIG = {
-            1: { enemies: 3, type: 'basic', color: 0x90EE90, size: 0.25, health: 40, speed: 0.015, reward: 8, name: 'Scout' },
-            2: { enemies: 4, type: 'grunt', color: 0xFF7F50, size: 0.3, health: 60, speed: 0.018, reward: 10, name: 'Grunt' },
-            3: { enemies: 5, type: 'soldier', color: 0xFF4500, size: 0.35, health: 80, speed: 0.02, reward: 12, name: 'Soldier' },
-            4: { enemies: 6, type: 'warrior', color: 0xFF0000, size: 0.4, health: 120, speed: 0.022, reward: 15, name: 'Warrior' },
-            5: { enemies: 7, type: 'veteran', color: 0xDC143C, size: 0.45, health: 160, speed: 0.025, reward: 18, name: 'Veteran' },
-            6: { enemies: 8, type: 'elite', color: 0x8B008B, size: 0.5, health: 220, speed: 0.028, reward: 22, name: 'Elite' },
-            7: { enemies: 9, type: 'champion', color: 0x4B0082, size: 0.55, health: 300, speed: 0.03, reward: 25, name: 'Champion' },
-            8: { enemies: 10, type: 'overlord', color: 0x000080, size: 0.6, health: 400, speed: 0.032, reward: 30, name: 'Overlord' },
-            9: { enemies: 11, type: 'demon', color: 0x800000, size: 0.65, health: 550, speed: 0.035, reward: 35, name: 'Demon' },
-            10: { enemies: 12, type: 'lord', color: 0x2F4F4F, size: 0.7, health: 750, speed: 0.038, reward: 40, name: 'Dark Lord' },
-            11: { enemies: 13, type: 'titan', color: 0x1C1C1C, size: 0.75, health: 1000, speed: 0.04, reward: 45, name: 'Titan' },
-            12: { enemies: 14, type: 'nightmare', color: 0x0D0D0D, size: 0.8, health: 1350, speed: 0.042, reward: 50, name: 'Nightmare' },
-            13: { enemies: 15, type: 'abomination', color: 0x660066, size: 0.85, health: 1800, speed: 0.045, reward: 60, name: 'Abomination' },
-            14: { enemies: 16, type: 'apocalypse', color: 0x8B0000, size: 0.9, health: 2400, speed: 0.048, reward: 70, name: 'Apocalypse' },
-            15: { enemies: 17, type: 'destroyer', color: 0x000000, size: 1.0, health: 3200, speed: 0.05, reward: 80, name: 'Destroyer' }
+            1: { enemies: 5, type: 'basic', color: 0x90EE90, size: 0.25, health: 40, speed: 0.015, reward: 8, name: 'Scout' },
+            2: { enemies: 6, type: 'grunt', color: 0xFF7F50, size: 0.3, health: 60, speed: 0.018, reward: 10, name: 'Grunt' },
+            3: { enemies: 7, type: 'soldier', color: 0xFF4500, size: 0.35, health: 80, speed: 0.02, reward: 12, name: 'Soldier' },
+            4: { enemies: 8, type: 'warrior', color: 0xFF0000, size: 0.4, health: 120, speed: 0.022, reward: 15, name: 'Warrior' },
+            5: { enemies: 9, type: 'veteran', color: 0xDC143C, size: 0.45, health: 160, speed: 0.025, reward: 18, name: 'Veteran' },
+            6: { enemies: 10, type: 'elite', color: 0x8B008B, size: 0.5, health: 220, speed: 0.028, reward: 22, name: 'Elite' },
+            7: { enemies: 11, type: 'champion', color: 0x4B0082, size: 0.55, health: 300, speed: 0.03, reward: 25, name: 'Champion' },
+            8: { enemies: 12, type: 'overlord', color: 0x000080, size: 0.6, health: 400, speed: 0.032, reward: 30, name: 'Overlord' },
+            9: { enemies: 13, type: 'demon', color: 0x800000, size: 0.65, health: 550, speed: 0.035, reward: 35, name: 'Demon' },
+            10: { enemies: 14, type: 'lord', color: 0x2F4F4F, size: 0.7, health: 750, speed: 0.038, reward: 40, name: 'Dark Lord' },
+            11: { enemies: 15, type: 'titan', color: 0x1C1C1C, size: 0.75, health: 1000, speed: 0.04, reward: 45, name: 'Titan' },
+            12: { enemies: 16, type: 'nightmare', color: 0x0D0D0D, size: 0.8, health: 1350, speed: 0.042, reward: 50, name: 'Nightmare' },
+            13: { enemies: 17, type: 'abomination', color: 0x660066, size: 0.85, health: 1800, speed: 0.045, reward: 60, name: 'Abomination' },
+            14: { enemies: 18, type: 'apocalypse', color: 0x8B0000, size: 0.9, health: 2400, speed: 0.048, reward: 70, name: 'Apocalypse' },
+            15: { enemies: 20, type: 'destroyer', color: 0x000000, size: 1.0, health: 3200, speed: 0.05, reward: 80, name: 'Destroyer' }
         };
 
         function createEnemy() {
-            const wave = Math.min(gameStateTD.wave, 15); // Cap at wave 15 config
+            const wave = Math.min(gameStateTD.wave, 15);
             const config = WAVE_CONFIG[wave];
             
             const difficultyMultiplier = {
@@ -2826,7 +2423,6 @@ function animate() {
                     enemyGeometry = new THREE.DodecahedronGeometry(config.size);
                     break;
                 default:
-                    // Special shapes for final enemies
                     enemyGeometry = new THREE.IcosahedronGeometry(config.size);
                     break;
             }
@@ -2873,6 +2469,10 @@ function animate() {
                 wave: wave,
                 size: config.size
             });
+            
+            // Update wave manager
+            waveManager.enemiesSpawned++;
+            waveManager.enemiesRemaining = waveManager.enemiesToSpawn - waveManager.enemiesSpawned + enemies.length;
             
             // Add enemy spawn animation
             enemy.scale.set(0, 0, 0);
@@ -2940,15 +2540,6 @@ function animate() {
             }
             towerBtn.classList.remove('selected');
         }
-        
-        function startWave() {
-            if (!gameStateTD.waveActive && !gameStateTD.gameOver && !gameStateTD.paused) {
-                gameStateTD.waveActive = true;
-                gameStateTD.enemySpawnTimer = 0;
-                playSound(500, 0.4, 'sine', 0.2); // Wave start sound
-                updateDifficultyDisplay();
-            }
-        }
 
         function pauseTD() {
             gameStateTD.paused = !gameStateTD.paused;
@@ -2960,21 +2551,65 @@ function animate() {
             document.getElementById('pause-td').classList.remove('active');
         }
 
-        function updateDifficultyDisplay() {
-            const difficultyElement = document.getElementById('difficulty');
-            const waveDisplay = document.getElementById('wave-display');
+        function completeWave() {
+            waveManager.waveInProgress = false;
+            waveManager.waveComplete = true;
+            gameStateTD.waveActive = false;
             
-            waveDisplay.textContent = gameStateTD.wave;
+            // Check for game completion
+            if (gameStateTD.wave >= gameStateTD.maxWaves) {
+                showVictoryTD();
+                return;
+            }
             
-            const difficultyColors = {
-                easy: 'linear-gradient(45deg, #4CAF50, #45a049)',
-                normal: 'linear-gradient(45deg, #FF9800, #F57C00)',
-                hard: 'linear-gradient(45deg, #FF5722, #D84315)',
-                nightmare: 'linear-gradient(45deg, #9C27B0, #7B1FA2)'
-            };
+            // Wave completion bonus
+            const waveBonus = 50 + (gameStateTD.wave * 15);
+            gameStateTD.money += waveBonus;
+            gameStateTD.wave++;
             
-            difficultyElement.textContent = gameStateTD.difficulty.toUpperCase();
-            difficultyElement.style.background = difficultyColors[gameStateTD.difficulty];
+            // Show wave completion message
+            showWaveCompleteMessage(waveBonus);
+            
+            // Reset for next wave
+            resetWaveManager();
+            updateTDUI();
+        }
+
+        function showWaveCompleteMessage(bonus) {
+            const message = document.createElement('div');
+            message.style.cssText = `
+                position: fixed;
+                top: 20%;
+                right: 20px;
+                background: linear-gradient(45deg, #4CAF50, #45a049);
+                color: white;
+                padding: 20px;
+                border-radius: 15px;
+                font-weight: bold;
+                font-size: 18px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                z-index: 2000;
+                animation: slideInRight 0.5s ease-out;
+                backdrop-filter: blur(10px);
+            `;
+            
+            message.innerHTML = `
+                <div>🎉 Wave ${gameStateTD.wave - 1} Complete!</div>
+                <div style="font-size: 14px; margin-top: 5px;">Bonus: +${bonus}</div>
+            `;
+            
+            document.body.appendChild(message);
+            
+            setTimeout(() => {
+                if (message.parentNode) {
+                    message.style.animation = 'slideOutRight 0.5s ease-out';
+                    setTimeout(() => {
+                        if (message.parentNode) {
+                            message.parentNode.removeChild(message);
+                        }
+                    }, 500);
+                }
+            }, 3000);
         }
 
         function showGameOverTD() {
@@ -3084,8 +2719,10 @@ function animate() {
             gameStatsTD.towersBuilt = 0;
             gameStatsTD.score = 0;
             
+            // Reset wave manager
+            resetWaveManager();
+            
             updateTDUI();
-            updateDifficultyDisplay();
             hideTowerInfo();
             
             // Reset pause overlay
@@ -3115,40 +2752,50 @@ function animate() {
             }
         }
         
+        // Enhanced animation loop with improved wave tracking
         function animate() {
             requestAnimationFrame(animate);
             
             if (!renderer || gameStateTD.gameOver || gameStateTD.paused) return;
             
-            // Spawn enemies
-            if (gameStateTD.waveActive) {
-                gameStateTD.enemySpawnTimer++;
-                const spawnRate = Math.max(30, 60 - gameStateTD.wave * 3);
-                const maxEnemies = Math.min(20, gameStateTD.wave * 3 + 2);
+            // Enhanced wave spawning system with proper tracking
+            if (waveManager.waveInProgress) {
+                waveManager.spawnTimer++;
                 
-                if (gameStateTD.enemySpawnTimer % spawnRate === 0 && enemies.length < maxEnemies) {
+                // Check if we should spawn more enemies
+                if (waveManager.spawnTimer >= waveManager.spawnInterval && 
+                    waveManager.enemiesSpawned < waveManager.enemiesToSpawn) {
                     createEnemy();
+                    waveManager.spawnTimer = 0;
+                    updateWaveDisplay();
                 }
                 
-                if (enemies.length === 0 && gameStateTD.enemySpawnTimer > 300) {
-                    if (gameStateTD.wave >= gameStateTD.maxWaves) {
-                        showVictoryTD();
-                        return;
-                    }
-                    
-                    gameStateTD.wave++;
-                    gameStateTD.waveActive = false;
-                    gameStateTD.enemySpawnTimer = 0;
-                    gameStateTD.money += 50 + (gameStateTD.wave * 10);
-                    updateTDUI();
-                    updateDifficultyDisplay();
+                // Check for wave completion
+                if (waveManager.enemiesSpawned >= waveManager.enemiesToSpawn && enemies.length === 0) {
+                    completeWave();
                 }
             }
             
-            // Move enemies
+            // Move enemies with enhanced visuals
             enemies.forEach((enemy, enemyIndex) => {
                 if (enemy.pathIndex < path.length - 1) {
                     enemy.progress += enemy.speed;
+                    
+                    // Add rotation based on enemy type
+                    if (enemy.type === 'elite' || enemy.type === 'champion') {
+                        enemy.mesh.rotation.y += 0.05;
+                    } else if (enemy.type === 'overlord' || enemy.type === 'demon') {
+                        enemy.mesh.rotation.x += 0.03;
+                        enemy.mesh.rotation.z += 0.02;
+                    } else if (enemy.wave >= 10) {
+                        enemy.mesh.rotation.y += 0.08;
+                        enemy.mesh.rotation.x += 0.04;
+                    }
+                    
+                    // Add floating motion for higher-tier enemies
+                    if (enemy.wave >= 6) {
+                        enemy.mesh.position.y = enemy.size + Math.sin(Date.now() * 0.005 + enemyIndex) * 0.1;
+                    }
                     
                     if (enemy.progress >= 1) {
                         enemy.pathIndex++;
@@ -3168,6 +2815,10 @@ function animate() {
                     enemies.splice(enemyIndex, 1);
                     gameStateTD.lives--;
                     updateTDUI();
+                    updateWaveDisplay();
+                    
+                    // Show damage effect
+                    showDamageEffect();
                     
                     if (gameStateTD.lives <= 0) {
                         showGameOverTD();
@@ -3175,13 +2826,13 @@ function animate() {
                 }
             });
             
-            // Tower shooting
+            // Tower shooting with enhanced targeting
             towers.forEach(tower => {
                 const now = Date.now();
                 if (now - tower.lastFire > tower.fireRate) {
-                    // Find nearest enemy in range
-                    let nearestEnemy = null;
-                    let nearestDistance = Infinity;
+                    // Prioritize stronger enemies (higher wave number)
+                    let bestTarget = null;
+                    let bestPriority = -1;
                     
                     enemies.forEach(enemy => {
                         const distance = Math.sqrt(
@@ -3189,25 +2840,34 @@ function animate() {
                             Math.pow(enemy.mesh.position.z - tower.z, 2)
                         );
                         
-                        if (distance <= tower.range && distance < nearestDistance) {
-                            nearestEnemy = enemy;
-                            nearestDistance = distance;
+                        if (distance <= tower.range) {
+                            // Priority system: higher wave enemies get priority
+                            const priority = enemy.wave * 100 + (tower.range - distance) * 10;
+                            if (priority > bestPriority) {
+                                bestTarget = enemy;
+                                bestPriority = priority;
+                            }
                         }
                     });
                     
-                    if (nearestEnemy) {
+                    if (bestTarget) {
                         createProjectile(
                             new THREE.Vector3(tower.x, 2, tower.z),
-                            nearestEnemy.mesh.position.clone(),
+                            bestTarget.mesh.position.clone(),
                             tower.damage
                         );
                         tower.lastFire = now;
-                        playSound(220, 0.1, 'triangle', 0.08); // Shoot sound
+                        playSound(220, 0.1, 'triangle', 0.08);
+                        
+                        // Visual muzzle flash for higher level towers
+                        if (tower.level >= 3) {
+                            createMuzzleFlash(tower);
+                        }
                     }
                 }
             });
             
-            // Move projectiles
+            // Enhanced projectile system
             projectiles.forEach((projectile, projectileIndex) => {
                 projectile.mesh.position.add(
                     projectile.direction.clone().multiplyScalar(projectile.speed)
@@ -3217,20 +2877,12 @@ function animate() {
                 enemies.forEach((enemy, enemyIndex) => {
                     const distance = projectile.mesh.position.distanceTo(enemy.mesh.position);
                     if (distance < 0.5) {
-                        enemy.health -= projectile.damage;
-                        playSound(150, 0.15, 'square', 0.1); // Hit sound
+                        const damage = projectile.damage;
+                        enemy.health -= damage;
                         
-                        // Visual damage feedback
-                        enemy.mesh.material.color.lerp(new THREE.Color(0xFFFFFF), 0.5);
-                        setTimeout(() => {
-                            if (enemy.mesh.parent) {
-                                enemy.mesh.material.color.setHex(
-                                    gameStateTD.wave <= 3 ? 0xFF4500 : 
-                                    gameStateTD.wave <= 6 ? 0xFF0000 : 
-                                    gameStateTD.wave <= 8 ? 0x8B008B : 0x000000
-                                );
-                            }
-                        }, 100);
+                        // Enhanced hit effects
+                        createHitEffect(enemy.mesh.position, enemy.type, damage);
+                        playSound(150, 0.15, 'square', 0.1);
                         
                         // Remove projectile
                         scene.remove(projectile.mesh);
@@ -3238,13 +2890,15 @@ function animate() {
                         
                         // Remove enemy if dead
                         if (enemy.health <= 0) {
+                            createDeathEffect(enemy.mesh.position, enemy.type);
                             scene.remove(enemy.mesh);
                             enemies.splice(enemyIndex, 1);
                             gameStateTD.money += enemy.reward;
                             gameStatsTD.enemiesKilled++;
-                            gameStatsTD.score += enemy.reward * 10;
+                            gameStatsTD.score += enemy.reward * 10 * gameStateTD.wave;
                             updateTDUI();
-                            playSound(300, 0.3, 'sawtooth', 0.12); // Death sound
+                            updateWaveDisplay();
+                            playSound(300, 0.3, 'sawtooth', 0.12);
                         }
                     }
                 });
@@ -3257,6 +2911,115 @@ function animate() {
             });
             
             renderer.render(scene, camera);
+        }
+
+        // Enhanced visual effects
+        function createMuzzleFlash(tower) {
+            const flashGeometry = new THREE.SphereGeometry(0.2, 4, 4);
+            const flashMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xFFFF00, 
+                transparent: true, 
+                opacity: 0.8 
+            });
+            const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+            flash.position.set(tower.x, 2.5, tower.z);
+            scene.add(flash);
+            
+            setTimeout(() => {
+                scene.remove(flash);
+            }, 100);
+        }
+
+        function createHitEffect(position, enemyType, damage) {
+            const hitGeometry = new THREE.SphereGeometry(0.15, 6, 6);
+            const hitMaterial = new THREE.MeshBasicMaterial({ 
+                color: damage > 100 ? 0xFF0000 : 0xFFAA00, 
+                transparent: true, 
+                opacity: 0.9 
+            });
+            const hit = new THREE.Mesh(hitGeometry, hitMaterial);
+            hit.position.copy(position);
+            scene.add(hit);
+            
+            // Animate hit effect
+            let scale = 0;
+            const animate = () => {
+                scale += 0.1;
+                hit.scale.setScalar(scale);
+                hit.material.opacity = 1 - (scale / 3);
+                
+                if (scale < 3) {
+                    requestAnimationFrame(animate);
+                } else {
+                    scene.remove(hit);
+                }
+            };
+            animate();
+        }
+
+        function createDeathEffect(position, enemyType) {
+            // Create multiple particles for death effect
+            for (let i = 0; i < 5; i++) {
+                const particleGeometry = new THREE.SphereGeometry(0.05, 4, 4);
+                const particleMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0xFF4500, 
+                    transparent: true, 
+                    opacity: 1 
+                });
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                particle.position.copy(position);
+                
+                // Random velocity
+                const velocity = {
+                    x: (Math.random() - 0.5) * 0.2,
+                    y: Math.random() * 0.3 + 0.1,
+                    z: (Math.random() - 0.5) * 0.2
+                };
+                
+                scene.add(particle);
+                
+                // Animate particle
+                let life = 1;
+                const animateParticle = () => {
+                    life -= 0.02;
+                    particle.position.x += velocity.x;
+                    particle.position.y += velocity.y;
+                    particle.position.z += velocity.z;
+                    velocity.y -= 0.01; // Gravity
+                    particle.material.opacity = life;
+                    
+                    if (life > 0) {
+                        requestAnimationFrame(animateParticle);
+                    } else {
+                        scene.remove(particle);
+                    }
+                };
+                animateParticle();
+            }
+        }
+
+        function showDamageEffect() {
+            // Screen flash effect when player takes damage
+            const flash = document.createElement('div');
+            flash.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(255, 0, 0, 0.3);
+                pointer-events: none;
+                z-index: 1999;
+                animation: damageFlash 0.3s ease-out;
+            `;
+            
+            document.body.appendChild(flash);
+            
+            setTimeout(() => {
+                if (flash.parentNode) {
+                    flash.parentNode.removeChild(flash);
+                }
+            }, 300);
         }
 
         // Mobile and PWA functionality
@@ -3473,6 +3236,14 @@ function animate() {
         // Convenience functions for mobile buttons
         function move(direction) {
             move2048(direction);
+        }
+
+        function saveGame() {
+            saveGame2048();
+        }
+
+        function loadGame() {
+            loadGame2048();
         }
 
         // Initialize on page load
