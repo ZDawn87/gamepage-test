@@ -830,15 +830,16 @@
             }
             
             .tile {
-                width: 70px;
-                height: 70px;
-                font-size: 18px;
+                width: 65px;
+                height: 65px;
+                font-size: 16px;
             }
             
             .grid-2048 {
-                gap: 10px;
-                padding: 20px;
-                max-width: 320px;
+                gap: 8px;
+                padding: 15px;
+                max-width: 100%;
+                width: fit-content;
             }
 
             .mobile-controls {
@@ -921,15 +922,16 @@
             }
 
             .tile {
-                width: 60px;
-                height: 60px;
-                font-size: 16px;
+                width: 55px;
+                height: 55px;
+                font-size: 14px;
             }
 
             .grid-2048 {
-                gap: 8px;
-                padding: 15px;
-                max-width: 280px;
+                gap: 6px;
+                padding: 12px;
+                max-width: 100%;
+                width: fit-content;
             }
 
             .score-board {
@@ -1084,7 +1086,7 @@
             <div class="td-ui">
                 <div class="td-stats">
                     <div>Lives: <span id="lives">25</span></div>
-                    <div>Money: $<span id="money">120</span></div>
+                    <div>Money: $<span id="money">160</span></div>
                     <div>Wave: <span id="wave">1</span></div>
                     <div>Score: <span id="td-score">0</span></div>
                 </div>
@@ -1105,7 +1107,7 @@
             </div>
             
             <div class="instructions">
-                <p>📱 Touch controls: Tap buttons or click on the battlefield to place towers. Right-click towers to upgrade! Defend against waves of enemies!</p>
+                <p>📱 <strong>Dynamic Pathfinding:</strong> Enemies adapt their route based on your tower placement! Block chokepoints strategically, but ensure a path always exists. Towers placed too close to each other may limit enemy routes for maximum effectiveness!</p>
             </div>
         </div>
         
@@ -1602,7 +1604,30 @@
             grid.innerHTML = '';
             grid.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
             
-            const tileSize = gridSize === 3 ? 90 : gridSize === 5 ? 70 : 100;
+            // Dynamic tile sizing based on screen width and grid size
+            let tileSize;
+            const screenWidth = window.innerWidth;
+            
+            if (screenWidth <= 480) {
+                // Very small screens
+                tileSize = gridSize === 3 ? 70 : gridSize === 5 ? 50 : 55;
+            } else if (screenWidth <= 768) {
+                // Medium screens (tablets)
+                tileSize = gridSize === 3 ? 80 : gridSize === 5 ? 60 : 65;
+            } else {
+                // Desktop screens
+                tileSize = gridSize === 3 ? 90 : gridSize === 5 ? 70 : 100;
+            }
+            
+            // Calculate maximum grid width to prevent overflow
+            const maxGridWidth = screenWidth - 80; // Leave 40px margin on each side
+            const calculatedGridWidth = (tileSize * gridSize) + (15 * (gridSize - 1)) + 30; // tiles + gaps + padding
+            
+            if (calculatedGridWidth > maxGridWidth) {
+                // Scale down tiles if grid would be too wide
+                const scaleFactor = maxGridWidth / calculatedGridWidth;
+                tileSize = Math.floor(tileSize * scaleFactor);
+            }
             
             for(let i = 0; i < gridSize; i++) {
                 for(let j = 0; j < gridSize; j++) {
@@ -1610,7 +1635,7 @@
                     tile.className = 'tile';
                     tile.style.width = `${tileSize}px`;
                     tile.style.height = `${tileSize}px`;
-                    tile.style.fontSize = `${Math.max(16, 24 - gridSize * 2)}px`;
+                    tile.style.fontSize = `${Math.max(12, Math.floor(tileSize * 0.25))}px`;
                     
                     if(board2048[i][j] !== 0) {
                         tile.textContent = board2048[i][j];
@@ -1947,9 +1972,7 @@
             document.getElementById('pause-2048').classList.remove('active');
         }
 
-        // Enhanced Tower Defense Game Logic with Balanced Economics
-        // Economic Balance: 22 towers max × $298 each fully upgraded = $6,556 total
-        // Total available income designed to be ~80% of max investment for challenge
+        // Enhanced Tower Defense Game Logic with 8 Tower Start
         let scene, camera, renderer;
         let towers = [];
         let enemies = [];
@@ -1963,7 +1986,7 @@
         };
         let gameStateTD = {
             lives: 25,
-            money: 120,
+            money: 160, // Updated to allow 8 towers (8 × $20 = $160)
             wave: 1,
             selectedTower: false,
             selectedUpgrade: false,
@@ -2034,12 +2057,12 @@
         function setDifficultyTD(diff) {
             gameStateTD.difficulty = diff;
             
-            // Reset game state based on difficulty - rebalanced economy
+            // Reset game state based on difficulty - Updated for 8 towers worth
             const settings = {
-                easy: { lives: 25, money: 120, maxWaves: 8 },
-                normal: { lives: 20, money: 100, maxWaves: 10 },
-                hard: { lives: 15, money: 80, maxWaves: 12 },
-                nightmare: { lives: 10, money: 60, maxWaves: 15 }
+                easy: { lives: 25, money: 160, maxWaves: 8 },    // 8 towers
+                normal: { lives: 20, money: 160, maxWaves: 10 },  // 8 towers
+                hard: { lives: 15, money: 180, maxWaves: 12 },    // 9 towers
+                nightmare: { lives: 10, money: 200, maxWaves: 15 } // 10 towers
             };
             
             const setting = settings[diff];
@@ -2290,8 +2313,206 @@
             return true;
         }
 
+        let pathSegments = []; // Store visual path segments for updates
+        let startPoint = { x: -12, z: -8 };
+        let endPoint = { x: 12, z: 8 };
+
         function createPath() {
-            path = [
+            // Clear existing path visuals
+            pathSegments.forEach(segment => scene.remove(segment));
+            pathSegments = [];
+            
+            // Calculate dynamic path using A* pathfinding
+            path = findPath(startPoint, endPoint);
+            
+            // Create path visual
+            const pathGeometry = new THREE.BoxGeometry(1, 0.1, 1);
+            const pathMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            
+            for (let point of path) {
+                const pathSegment = new THREE.Mesh(pathGeometry, pathMaterial);
+                pathSegment.position.set(point.x, 0.05, point.z);
+                scene.add(pathSegment);
+                pathSegments.push(pathSegment);
+            }
+        }
+
+        // A* Pathfinding Algorithm
+        function findPath(start, end) {
+            const gridSize = 25; // Grid resolution for pathfinding
+            const cellSize = 1;
+            const openSet = [];
+            const closedSet = new Set();
+            const cameFrom = new Map();
+            const gScore = new Map();
+            const fScore = new Map();
+            
+            // Convert world coordinates to grid coordinates
+            function worldToGrid(pos) {
+                return {
+                    x: Math.round((pos.x + 12) / cellSize),
+                    z: Math.round((pos.z + 10) / cellSize)
+                };
+            }
+            
+            // Convert grid coordinates to world coordinates
+            function gridToWorld(pos) {
+                return {
+                    x: (pos.x * cellSize) - 12,
+                    z: (pos.z * cellSize) - 10
+                };
+            }
+            
+            // Check if a grid position is blocked by a tower
+            function isBlocked(gridPos) {
+                const worldPos = gridToWorld(gridPos);
+                
+                // Check if position is blocked by towers
+                for (let tower of towers) {
+                    const distance = Math.sqrt(
+                        Math.pow(worldPos.x - tower.x, 2) + 
+                        Math.pow(worldPos.z - tower.z, 2)
+                    );
+                    if (distance < 1.2) return true; // Tower blocking radius
+                }
+                
+                // Check boundaries
+                if (gridPos.x < 0 || gridPos.x >= gridSize || 
+                    gridPos.z < 0 || gridPos.z >= 20) return true;
+                
+                return false;
+            }
+            
+            // Heuristic function (Manhattan distance)
+            function heuristic(a, b) {
+                return Math.abs(a.x - b.x) + Math.abs(a.z - b.z);
+            }
+            
+            // Get neighbors of a grid position
+            function getNeighbors(pos) {
+                const neighbors = [];
+                const directions = [
+                    { x: 0, z: 1 }, { x: 1, z: 0 }, { x: 0, z: -1 }, { x: -1, z: 0 },
+                    { x: 1, z: 1 }, { x: -1, z: 1 }, { x: 1, z: -1 }, { x: -1, z: -1 }
+                ];
+                
+                for (let dir of directions) {
+                    const neighbor = { x: pos.x + dir.x, z: pos.z + dir.z };
+                    if (!isBlocked(neighbor)) {
+                        neighbors.push(neighbor);
+                    }
+                }
+                return neighbors;
+            }
+            
+            function posKey(pos) {
+                return `${pos.x},${pos.z}`;
+            }
+            
+            const startGrid = worldToGrid(start);
+            const endGrid = worldToGrid(end);
+            
+            openSet.push(startGrid);
+            gScore.set(posKey(startGrid), 0);
+            fScore.set(posKey(startGrid), heuristic(startGrid, endGrid));
+            
+            while (openSet.length > 0) {
+                // Find node in openSet with lowest fScore
+                let current = openSet.reduce((min, node) => 
+                    (fScore.get(posKey(node)) || Infinity) < (fScore.get(posKey(min)) || Infinity) ? node : min
+                );
+                
+                // If we reached the goal
+                if (current.x === endGrid.x && current.z === endGrid.z) {
+                    const finalPath = [];
+                    let temp = current;
+                    
+                    while (temp) {
+                        finalPath.unshift(gridToWorld(temp));
+                        temp = cameFrom.get(posKey(temp));
+                    }
+                    
+                    return optimizePath(finalPath);
+                }
+                
+                // Move current from openSet to closedSet
+                openSet.splice(openSet.indexOf(current), 1);
+                closedSet.add(posKey(current));
+                
+                // Check all neighbors
+                for (let neighbor of getNeighbors(current)) {
+                    const neighborKey = posKey(neighbor);
+                    
+                    if (closedSet.has(neighborKey)) continue;
+                    
+                    // Distance from start to neighbor through current
+                    const tentativeGScore = (gScore.get(posKey(current)) || 0) + 1;
+                    
+                    if (!openSet.some(n => n.x === neighbor.x && n.z === neighbor.z)) {
+                        openSet.push(neighbor);
+                    } else if (tentativeGScore >= (gScore.get(neighborKey) || Infinity)) {
+                        continue;
+                    }
+                    
+                    // This path to neighbor is better than any previous one
+                    cameFrom.set(neighborKey, current);
+                    gScore.set(neighborKey, tentativeGScore);
+                    fScore.set(neighborKey, tentativeGScore + heuristic(neighbor, endGrid));
+                }
+            }
+            
+            // No path found, return fallback path
+            return getFallbackPath();
+        }
+        
+        // Optimize path by removing unnecessary waypoints
+        function optimizePath(rawPath) {
+            if (rawPath.length <= 2) return rawPath;
+            
+            const optimized = [rawPath[0]];
+            
+            for (let i = 1; i < rawPath.length - 1; i++) {
+                const prev = rawPath[i - 1];
+                const current = rawPath[i];
+                const next = rawPath[i + 1];
+                
+                // Check if we can skip this waypoint (if line from prev to next is clear)
+                if (!lineOfSightBlocked(prev, next)) {
+                    continue; // Skip this waypoint
+                }
+                
+                optimized.push(current);
+            }
+            
+            optimized.push(rawPath[rawPath.length - 1]);
+            return optimized;
+        }
+        
+        // Check if line of sight between two points is blocked
+        function lineOfSightBlocked(start, end) {
+            const steps = 20;
+            for (let i = 1; i < steps; i++) {
+                const t = i / steps;
+                const checkPoint = {
+                    x: start.x + (end.x - start.x) * t,
+                    z: start.z + (end.z - start.z) * t
+                };
+                
+                // Check if this point is blocked by any tower
+                for (let tower of towers) {
+                    const distance = Math.sqrt(
+                        Math.pow(checkPoint.x - tower.x, 2) + 
+                        Math.pow(checkPoint.z - tower.z, 2)
+                    );
+                    if (distance < 1.0) return true;
+                }
+            }
+            return false;
+        }
+        
+        // Fallback path when no dynamic path is possible
+        function getFallbackPath() {
+            return [
                 { x: -12, z: -8 },
                 { x: -8, z: -8 },
                 { x: -8, z: -4 },
@@ -2304,16 +2525,6 @@
                 { x: 8, z: 8 },
                 { x: 12, z: 8 }
             ];
-            
-            // Create path visual
-            const pathGeometry = new THREE.BoxGeometry(1, 0.1, 1);
-            const pathMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-            
-            for (let point of path) {
-                const pathSegment = new THREE.Mesh(pathGeometry, pathMaterial);
-                pathSegment.position.set(point.x, 0.05, point.z);
-                scene.add(pathSegment);
-            }
         }
         
         function createTower(x, z) {
@@ -2379,7 +2590,7 @@
             document.getElementById('tower-info').style.display = 'none';
         }
         
-        // Wave configuration system - balanced economy scaling
+        // Wave configuration system - balanced for 8 tower economy
         const WAVE_CONFIG = {
             1: { enemies: 5, type: 'basic', color: 0x90EE90, size: 0.25, health: 40, speed: 0.025, reward: 8, name: 'Scout' },
             2: { enemies: 6, type: 'grunt', color: 0xFF7F50, size: 0.3, health: 60, speed: 0.023, reward: 10, name: 'Grunt' },
@@ -2706,12 +2917,12 @@
             projectiles = [];
             selectedTower = null;
             
-            // Reset game state based on difficulty - rebalanced economy
+            // Reset game state based on difficulty - Updated for 8 towers worth
             const settings = {
-                easy: { lives: 25, money: 120 },
-                normal: { lives: 20, money: 100 },
-                hard: { lives: 15, money: 80 },
-                nightmare: { lives: 10, money: 60 }
+                easy: { lives: 25, money: 160 },    // 8 towers worth
+                normal: { lives: 20, money: 160 },  // 8 towers worth
+                hard: { lives: 15, money: 180 },    // 9 towers worth
+                nightmare: { lives: 10, money: 200 } // 10 towers worth
             };
             
             const setting = settings[gameStateTD.difficulty];
