@@ -830,15 +830,16 @@
             }
             
             .tile {
-                width: 70px;
-                height: 70px;
-                font-size: 18px;
+                width: 65px;
+                height: 65px;
+                font-size: 16px;
             }
             
             .grid-2048 {
-                gap: 10px;
-                padding: 20px;
-                max-width: 320px;
+                gap: 8px;
+                padding: 15px;
+                max-width: 100%;
+                width: fit-content;
             }
 
             .mobile-controls {
@@ -921,15 +922,16 @@
             }
 
             .tile {
-                width: 60px;
-                height: 60px;
-                font-size: 16px;
+                width: 55px;
+                height: 55px;
+                font-size: 14px;
             }
 
             .grid-2048 {
-                gap: 8px;
-                padding: 15px;
-                max-width: 280px;
+                gap: 6px;
+                padding: 12px;
+                max-width: 100%;
+                width: fit-content;
             }
 
             .score-board {
@@ -1008,7 +1010,7 @@
             <a href="https://github.com/ZDawn87/gamepage-test/tree/ZDawn87-patch-2" target="_blank" style="color: rgba(255,255,255,0.8); text-decoration: none; font-size: 16px; padding: 8px 16px; background: rgba(255,255,255,0.1); border-radius: 10px; backdrop-filter: blur(5px); transition: all 0.3s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
                 📖 View Source Code & Documentation
             </a>
-            <a href="#" target="_blank" style="color: rgba(255,255,255,0.8); text-decoration: none; font-size: 16px; padding: 8px 16px; background: rgba(76, 175, 80, 0.2); border-radius: 10px; backdrop-filter: blur(5px); transition: all 0.3s ease;" onmouseover="this.style.background='rgba(76, 175, 80, 0.3)'" onmouseout="this.style.background='rgba(76, 175, 80, 0.2)'">
+            <a href="https://onespruce.com" target="_blank" style="color: rgba(255,255,255,0.8); text-decoration: none; font-size: 16px; padding: 8px 16px; background: rgba(76, 175, 80, 0.2); border-radius: 10px; backdrop-filter: blur(5px); transition: all 0.3s ease;" onmouseover="this.style.background='rgba(76, 175, 80, 0.3)'" onmouseout="this.style.background='rgba(76, 175, 80, 0.2)'">
                 🌟 Visit My Personal Site
             </a>
         </div>
@@ -1084,7 +1086,7 @@
             <div class="td-ui">
                 <div class="td-stats">
                     <div>Lives: <span id="lives">25</span></div>
-                    <div>Money: $<span id="money">120</span></div>
+                    <div>Money: $<span id="money">160</span></div>
                     <div>Wave: <span id="wave">1</span></div>
                     <div>Score: <span id="td-score">0</span></div>
                 </div>
@@ -1105,7 +1107,7 @@
             </div>
             
             <div class="instructions">
-                <p>📱 Touch controls: Tap buttons or click on the battlefield to place towers. Right-click towers to upgrade! Defend against waves of enemies!</p>
+                <p>📱 Touch controls: Tap buttons or click on the battlefield to place towers. Right-click towers to upgrade! Defend against waves of enemies! Start with enough money for 8 towers!</p>
             </div>
         </div>
         
@@ -1602,7 +1604,30 @@
             grid.innerHTML = '';
             grid.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
             
-            const tileSize = gridSize === 3 ? 90 : gridSize === 5 ? 70 : 100;
+            // Dynamic tile sizing based on screen width and grid size
+            let tileSize;
+            const screenWidth = window.innerWidth;
+            
+            if (screenWidth <= 480) {
+                // Very small screens
+                tileSize = gridSize === 3 ? 70 : gridSize === 5 ? 50 : 55;
+            } else if (screenWidth <= 768) {
+                // Medium screens (tablets)
+                tileSize = gridSize === 3 ? 80 : gridSize === 5 ? 60 : 65;
+            } else {
+                // Desktop screens
+                tileSize = gridSize === 3 ? 90 : gridSize === 5 ? 70 : 100;
+            }
+            
+            // Calculate maximum grid width to prevent overflow
+            const maxGridWidth = screenWidth - 80; // Leave 40px margin on each side
+            const calculatedGridWidth = (tileSize * gridSize) + (15 * (gridSize - 1)) + 30; // tiles + gaps + padding
+            
+            if (calculatedGridWidth > maxGridWidth) {
+                // Scale down tiles if grid would be too wide
+                const scaleFactor = maxGridWidth / calculatedGridWidth;
+                tileSize = Math.floor(tileSize * scaleFactor);
+            }
             
             for(let i = 0; i < gridSize; i++) {
                 for(let j = 0; j < gridSize; j++) {
@@ -1610,7 +1635,7 @@
                     tile.className = 'tile';
                     tile.style.width = `${tileSize}px`;
                     tile.style.height = `${tileSize}px`;
-                    tile.style.fontSize = `${Math.max(16, 24 - gridSize * 2)}px`;
+                    tile.style.fontSize = `${Math.max(12, Math.floor(tileSize * 0.25))}px`;
                     
                     if(board2048[i][j] !== 0) {
                         tile.textContent = board2048[i][j];
@@ -1947,9 +1972,7 @@
             document.getElementById('pause-2048').classList.remove('active');
         }
 
-        // Enhanced Tower Defense Game Logic with Balanced Economics
-        // Economic Balance: 22 towers max × $298 each fully upgraded = $6,556 total
-        // Total available income designed to be ~80% of max investment for challenge
+        // Enhanced Tower Defense Game Logic with 8 Tower Start
         let scene, camera, renderer;
         let towers = [];
         let enemies = [];
@@ -1963,7 +1986,7 @@
         };
         let gameStateTD = {
             lives: 25,
-            money: 120,
+            money: 160, // Updated to allow 8 towers (8 × $20 = $160)
             wave: 1,
             selectedTower: false,
             selectedUpgrade: false,
@@ -2034,12 +2057,12 @@
         function setDifficultyTD(diff) {
             gameStateTD.difficulty = diff;
             
-            // Reset game state based on difficulty - rebalanced economy
+            // Reset game state based on difficulty - Updated for 8 towers worth
             const settings = {
-                easy: { lives: 25, money: 120, maxWaves: 8 },
-                normal: { lives: 20, money: 100, maxWaves: 10 },
-                hard: { lives: 15, money: 80, maxWaves: 12 },
-                nightmare: { lives: 10, money: 60, maxWaves: 15 }
+                easy: { lives: 25, money: 160, maxWaves: 8 },    // 8 towers
+                normal: { lives: 20, money: 160, maxWaves: 10 },  // 8 towers
+                hard: { lives: 15, money: 180, maxWaves: 12 },    // 9 towers
+                nightmare: { lives: 10, money: 200, maxWaves: 15 } // 10 towers
             };
             
             const setting = settings[diff];
@@ -2379,7 +2402,7 @@
             document.getElementById('tower-info').style.display = 'none';
         }
         
-        // Wave configuration system - balanced economy scaling
+        // Wave configuration system - balanced for 8 tower economy
         const WAVE_CONFIG = {
             1: { enemies: 5, type: 'basic', color: 0x90EE90, size: 0.25, health: 40, speed: 0.025, reward: 8, name: 'Scout' },
             2: { enemies: 6, type: 'grunt', color: 0xFF7F50, size: 0.3, health: 60, speed: 0.023, reward: 10, name: 'Grunt' },
@@ -2706,12 +2729,12 @@
             projectiles = [];
             selectedTower = null;
             
-            // Reset game state based on difficulty - rebalanced economy
+            // Reset game state based on difficulty - Updated for 8 towers worth
             const settings = {
-                easy: { lives: 25, money: 120 },
-                normal: { lives: 20, money: 100 },
-                hard: { lives: 15, money: 80 },
-                nightmare: { lives: 10, money: 60 }
+                easy: { lives: 25, money: 160 },    // 8 towers worth
+                normal: { lives: 20, money: 160 },  // 8 towers worth
+                hard: { lives: 15, money: 180 },    // 9 towers worth
+                nightmare: { lives: 10, money: 200 } // 10 towers worth
             };
             
             const setting = settings[gameStateTD.difficulty];
